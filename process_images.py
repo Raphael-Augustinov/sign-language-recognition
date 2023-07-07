@@ -1,23 +1,12 @@
+import csv
 import os
 import cv2
 import mediapipe as mp
-
-
-def calc_landmark_list(image, hand_landmarks):
-    image_width, image_height = image.shape[1], image.shape[0]
-    landmark_point = []
-
-    # Keypoint
-    for _, landmark in enumerate(hand_landmarks.landmark):
-        landmark_x = min(int(landmark.x * image_width), image_width - 1)
-        landmark_y = min(int(landmark.y * image_height), image_height - 1)
-        landmark_point.append([landmark_x, landmark_y])
-
-    return landmark_point
+from app import calc_landmark_list, pre_process_landmark
 
 
 def main():
-    # Initialize MediaPipe Hand
+    # Model load #############################################################
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(
         static_image_mode=True,
@@ -25,29 +14,35 @@ def main():
         min_detection_confidence=0.7,
         min_tracking_confidence=0.5,
     )
-
     # Directory containing images
-    image_directory = 'ASL_Dataset/Train/A'
+    train_directory = 'ASL_Dataset/Train'
+    csv_path = 'model/keypoint_classifier/keypoint.csv'
 
-    # Loop through each image in the directory
-    for filename in os.listdir(image_directory):
-        if filename.endswith(".jpg"):
-            # Read image
-            image = cv2.imread(os.path.join(image_directory, filename))
-
-            # Convert the image to RGB
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-            # Process image to extract landmarks
-            results = hands.process(image)
-
-            if results.multi_hand_landmarks:
-                for hand_landmarks in results.multi_hand_landmarks:
-                    # Extract the landmark coordinates
-                    landmark_list = calc_landmark_list(image, hand_landmarks)
-
-                    # Output the landmark coordinates
-                    print(f"Landmarks for {filename}: {landmark_list}")
+    index = 0
+    for letter_dir in sorted(os.listdir(train_directory)):
+        letter_dir_path = os.path.join(train_directory, letter_dir)
+        if os.path.isdir(letter_dir_path):
+            if index < 22:
+                index += 1
+                continue
+            # Loop through each file in the subdirectory
+            print(letter_dir_path)
+            print(index)
+            for filename in os.listdir(letter_dir_path):
+                image = cv2.imread(os.path.join(letter_dir_path, filename))
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                results = hands.process(image)
+                if results.multi_hand_landmarks:
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        # Extract the landmark coordinates using the imported function
+                        landmark_list = calc_landmark_list(image, hand_landmarks)
+                        normalized_landmarks = pre_process_landmark(landmark_list)
+                        # Output the landmark coordinates
+                        # Store the normalized landmarks in the keypoint.csv file
+                        with open(csv_path, 'a', newline="") as f:
+                            writer = csv.writer(f)
+                            writer.writerow([index, *normalized_landmarks])
+            index += 1
 
 
 # Run the main function
